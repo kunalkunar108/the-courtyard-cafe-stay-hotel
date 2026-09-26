@@ -45,10 +45,135 @@ function RoomDetails(){const {roomId}=useParams();const room=useQuery({queryKey:
 function Checkout(){const q=new URLSearchParams(location.search);const roomId=q.get("room")||"";const room=useQuery({queryKey:["room",roomId],queryFn:()=>getRoom(roomId),enabled:!!roomId}).data;const {user}=useAuth();const nav=useNavigate();const [ci,setCi]=useState(q.get("checkIn")||today()),[co,setCo]=useState(q.get("checkOut")||today()),[adults,setAdults]=useState(2),[children,setChildren]=useState(0),[name,setName]=useState(""),[phone,setPhone]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[payment,setPayment]=useState(false);if(!room)return <div className="container-page py-32 text-center"><h1 className="section-title text-forest">Choose a room first</h1><Link className="btn-primary mt-8" to="/rooms">Browse rooms</Link></div>;const quote=calculateQuote(room,ci,co);function loadRazorpay(){return new Promise<boolean>(resolve=>{if(window.Razorpay){resolve(true);return}const existing=document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');if(existing){existing.addEventListener("load",()=>resolve(true));existing.addEventListener("error",()=>resolve(false));return}const script=document.createElement("script");script.src="https://checkout.razorpay.com/v1/checkout.js";script.onload=()=>resolve(true);script.onerror=()=>resolve(false);document.body.appendChild(script)})}async function submit(e:FormEvent){e.preventDefault();setError("");if(!user){nav("/login");return}if(quote.nights<1){setError("Check-out must be after check-in.");return}if(adults+children>room.capacity){setError("Guest count exceeds this room's capacity.");return}setBusy(true);try{const result=await createBooking({roomId:room.id,guestName:name,guestEmail:user.email||"",guestPhone:phone,checkIn:ci,checkOut:co,adults,children});if(!result.paymentRequired){nav("/dashboard?booking="+result.bookingId);return}const loaded=await loadRazorpay();if(!loaded||!window.Razorpay)throw new Error("Payment checkout could not load. Please check your connection and try again.");setPayment(true);await new Promise<void>((resolve,reject)=>{const options:RazorpayOptions={key:result.keyId||"",amount:result.amount*100,currency:result.currency,name:"The Grand Courtyard Hotel",description:room.name+" · "+result.bookingId,order_id:result.razorpayOrderId,prefill:{name,email:user.email||"",contact:phone},theme:{color:"#173f31"},handler:async response=>{try{await verifyPayment({bookingId:result.bookingId,razorpayOrderId:response.razorpay_order_id,razorpayPaymentId:response.razorpay_payment_id,razorpaySignature:response.razorpay_signature});resolve()}catch(err){reject(err)}}};const rz=new window.Razorpay(options);rz.on("payment.failed",()=>reject(new Error("Payment failed. No money was confirmed by the hotel.")));rz.open()});nav("/dashboard?booking="+result.bookingId)}catch(err){setError(err instanceof Error?err.message:"Booking or payment could not be completed.")}finally{setBusy(false);setPayment(false)}}return <div className="container-page py-20"><Heading eyebrow="Secure booking" title="Reserve your stay." body="Your booking is created only after the server confirms availability. Online payments are verified server-side."/><div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_.9fr]"><form onSubmit={submit} className="card p-7"><div className="grid gap-5 sm:grid-cols-2"><label>Check-in<input className="input mt-2" type="date" min={today()} value={ci} onChange={e=>setCi(e.target.value)}/></label><label>Check-out<input className="input mt-2" type="date" min={ci} value={co} onChange={e=>setCo(e.target.value)}/></label><label>Adults<select className="input mt-2" value={adults} onChange={e=>setAdults(Number(e.target.value))}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select></label><label>Children<select className="input mt-2" value={children} onChange={e=>setChildren(Number(e.target.value))}>{[0,1,2,3].map(n=><option key={n}>{n}</option>)}</select></label></div><input className="input mt-5" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} required/><input className="input mt-4" placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)} required/>{error&&<div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}<button className="btn-primary mt-6 w-full" disabled={busy}>{payment?"Opening secure payment...":busy?"Creating secure booking...":user?"Continue to secure payment":"Sign in to continue"}</button><div className="mt-4 flex items-center justify-center gap-2 text-xs text-ink/45"><ShieldCheck size={14}/> Razorpay payment · server verification</div></form><div className="card p-7"><div className="flex gap-4"><img src={room.images[0]} alt={room.name} className="h-28 w-32 rounded-2xl object-cover"/><div><div className="font-semibold text-forest">{room.name}</div><div className="text-sm text-ink/50">{room.size} · {room.beds}</div></div></div><div className="mt-8 space-y-4 text-sm"><div className="flex justify-between"><span>Room × {quote.nights} nights</span><span>{money(quote.base)}</span></div><div className="flex justify-between"><span>Taxes</span><span>{money(quote.tax)}</span></div><div className="flex justify-between border-t border-black/5 pt-4 text-lg font-semibold text-forest"><span>Total</span><span>{money(quote.total)}</span></div></div><div className="mt-8 rounded-2xl bg-cream p-4 text-xs leading-5 text-ink/55">The amount shown here is an estimate. The trusted backend recalculates the final amount before creating the payment order.</div></div></div></div>}
 function AuthPage(){const {user,signIn,signUp,google}=useAuth();const nav=useNavigate();const [mode,setMode]=useState<"login"|"signup">("login"),[name,setName]=useState(""),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState("");if(user)return <Navigate to="/dashboard" replace/>;async function submit(e:FormEvent){e.preventDefault();setError("");try{if(mode==="login")await signIn(email,password);else await signUp(name,email,password);nav("/dashboard")}catch(err){setError(err instanceof Error?err.message:"Authentication failed.")}}return <div className="container-page flex min-h-[70vh] items-center justify-center py-20"><div className="card w-full max-w-lg p-8"><div className="eyebrow">{mode==="login"?"Welcome back":"Create an account"}</div><h1 className="display mt-3 text-5xl text-forest">{mode==="login"?"Your stay, in one place.":"Plan your next comfortable stay."}</h1><form onSubmit={submit} className="mt-8 space-y-4">{mode==="signup"&&<input className="input" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} required/>}<input className="input" type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} required/><input className="input" type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} minLength={6} required/>{error&&<div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}<button className="btn-primary w-full">{mode==="login"?"Sign in":"Create account"}</button></form><button className="btn-secondary mt-3 w-full" onClick={()=>void google()}>Continue with Google</button><button className="mt-5 w-full text-sm text-forest underline" onClick={()=>setMode(mode==="login"?"signup":"login")}>{mode==="login"?"New guest? Create an account":"Already have an account? Sign in"}</button></div></div>}
 
-function Dashboard(){const {user,profile}=useAuth();const bookings=useQuery({queryKey:["bookings",user?.uid],queryFn:()=>getUserBookings(user!.uid),enabled:!!user}).data??[];if(!user)return <Navigate to="/login" replace/>;return <div className="container-page py-20"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><Heading eyebrow="Guest dashboard" title={profile?.name?"Welcome, "+profile.name+".":"Your stay, in one place."}/><Link className="btn-primary" to="/rooms">Book another stay</Link></div><div className="mt-10 grid gap-4 md:grid-cols-3"><div className="card p-6"><div className="text-sm text-ink/45">Upcoming</div><div className="mt-2 text-3xl font-semibold text-forest">{bookings.filter(b=>b.bookingStatus==="pending"||b.bookingStatus==="confirmed").length}</div></div><div className="card p-6"><div className="text-sm text-ink/45">Total bookings</div><div className="mt-2 text-3xl font-semibold text-forest">{bookings.length}</div></div><div className="card p-6"><div className="text-sm text-ink/45">Signed in as</div><div className="mt-2 text-sm font-semibold text-forest">{user.email}</div></div></div><div className="mt-10"><div className="text-lg font-semibold text-forest">My bookings</div><div className="mt-4 space-y-3">{bookings.length===0?<div className="card p-8 text-sm text-ink/55">No bookings yet.</div>:bookings.map(b=><BookingCard booking={b} key={b.id}/>)}</div></div></div>}
+function Dashboard(){
+  const {user,profile}=useAuth();
+  const bookings=useQuery({queryKey:["bookings",user?.uid],queryFn:()=>getUserBookings(user!.uid),enabled:!!user}).data??[];
+  const [section,setSection]=useState<"overview"|"upcoming"|"past">("overview");
+  if(!user)return <Navigate to="/login" replace/>;
 
-function BookingCard({booking}:{booking:Booking}){const [busy,setBusy]=useState(false);async function cancel(){setBusy(true);try{await cancelBooking(booking.id);window.location.reload()}catch{}finally{setBusy(false)}}return <div className="card flex flex-col justify-between gap-5 p-6 md:flex-row md:items-center"><div><div className="font-semibold text-forest">{booking.roomNameSnapshot}</div><div className="mt-1 text-sm text-ink/55">{booking.checkIn} → {booking.checkOut} · {booking.adults} adults</div><div className="mt-2 flex gap-2"><span className="badge">{booking.bookingStatus}</span><span className="badge">{booking.paymentStatus}</span></div></div><div className="flex items-center gap-4"><div className="text-right"><div className="font-semibold text-forest">{money(booking.totalAmount)}</div><div className="text-xs text-ink/40">{booking.id}</div></div>{booking.bookingStatus==="confirmed"&&<button className="btn-secondary" disabled={busy} onClick={()=>void cancel()}>{busy?"Cancelling":"Cancel"}</button>}</div></div>}
+  const todayDate=today();
+  const upcoming=bookings.filter(b=>b.bookingStatus!=="cancelled"&&b.checkOut>=todayDate);
+  const past=bookings.filter(b=>b.bookingStatus==="completed"||b.checkOut<todayDate);
+  const cancelled=bookings.filter(b=>b.bookingStatus==="cancelled");
+  const visible=section==="upcoming"?upcoming:section==="past"?past:bookings;
 
+  return <div className="container-page py-12 sm:py-20">
+    <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
+      <aside className="h-fit rounded-[28px] border border-black/5 bg-white p-4 shadow-sm lg:sticky lg:top-28">
+        <div className="px-3 py-4">
+          <div className="eyebrow">Guest portal</div>
+          <div className="mt-2 truncate font-semibold text-forest">{profile?.name||"Guest"}</div>
+          <div className="mt-1 truncate text-xs text-ink/45">{user.email}</div>
+        </div>
+        <nav className="mt-3 space-y-1">
+          {([["overview","Overview"],["upcoming","Upcoming stays"],["past","Past stays"]] as const).map(([key,label])=>
+            <button key={key} onClick={()=>setSection(key)} className={section===key?"flex w-full items-center rounded-2xl bg-forest px-4 py-3 text-left text-sm font-semibold text-white":"flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm text-ink/60 hover:bg-cream hover:text-forest"}>
+              {label}
+            </button>
+          )}
+        </nav>
+        <div className="mt-5 border-t border-black/5 pt-5">
+          <Link className="btn-primary w-full" to="/rooms">Book a stay <ArrowRight size={15}/></Link>
+          <Link className="btn-secondary mt-2 w-full" to="/contact">Contact hotel</Link>
+        </div>
+      </aside>
+
+      <section className="min-w-0">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div>
+            <div className="eyebrow">{section==="overview"?"Your stay":section==="upcoming"?"Upcoming stays":"Past stays"}</div>
+            <h1 className="display mt-3 text-5xl text-forest">{profile?.name?"Welcome, "+profile.name+".":"Your stay, in one place."}</h1>
+            <p className="mt-4 max-w-2xl leading-7 text-ink/55">Manage your reservations, review payment status and keep your hotel details together.</p>
+          </div>
+          <Link className="btn-primary hidden sm:inline-flex" to="/rooms">Book another stay</Link>
+        </div>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="card p-5"><div className="flex items-center justify-between"><span className="text-sm text-ink/45">Upcoming</span><CalendarDays size={18} className="text-gold"/></div><div className="mt-3 text-3xl font-semibold text-forest">{upcoming.length}</div></div>
+          <div className="card p-5"><div className="flex items-center justify-between"><span className="text-sm text-ink/45">Total bookings</span><ShieldCheck size={18} className="text-gold"/></div><div className="mt-3 text-3xl font-semibold text-forest">{bookings.length}</div></div>
+          <div className="card p-5"><div className="flex items-center justify-between"><span className="text-sm text-ink/45">Past stays</span><Clock3 size={18} className="text-gold"/></div><div className="mt-3 text-3xl font-semibold text-forest">{past.length}</div></div>
+          <div className="card p-5"><div className="flex items-center justify-between"><span className="text-sm text-ink/45">Cancelled</span><X size={18} className="text-gold"/></div><div className="mt-3 text-3xl font-semibold text-forest">{cancelled.length}</div></div>
+        </div>
+
+        <div className="mt-10 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-lg font-semibold text-forest">{section==="overview"?"All bookings":section==="upcoming"?"Upcoming stays":"Past stays"}</div>
+            <div className="mt-1 text-sm text-ink/45">{visible.length} reservation{visible.length===1?"":"s"}</div>
+          </div>
+          <Link className="btn-secondary sm:hidden" to="/rooms">Book a stay</Link>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {visible.length===0?
+            <div className="card p-10 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cream text-gold"><CalendarDays/></div>
+              <div className="mt-4 font-semibold text-forest">{section==="past"?"No past stays yet":"No bookings yet"}</div>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink/50">When you make a reservation, the details and payment status will appear here.</p>
+              <Link className="btn-primary mt-6" to="/rooms">Explore rooms</Link>
+            </div>
+          :visible.map(b=><BookingCard booking={b} key={b.id}/>)}
+        </div>
+      </section>
+    </div>
+  </div>
+}
+
+function BookingCard({booking}:{booking:Booking}){
+  const [busy,setBusy]=useState(false);
+  const [expanded,setExpanded]=useState(false);
+  const [error,setError]=useState("");
+  async function cancel(){
+    if(!window.confirm("Cancel this reservation? This action cannot be undone."))return;
+    setBusy(true);setError("");
+    try{await cancelBooking(booking.id);window.location.reload()}
+    catch(err){setError(err instanceof Error?err.message:"Cancellation could not be completed.");setBusy(false)}
+  }
+  const statusClass=booking.bookingStatus==="confirmed"?"bg-green-50 text-green-800":booking.bookingStatus==="cancelled"?"bg-red-50 text-red-700":"bg-amber-50 text-amber-800";
+  const paymentClass=booking.paymentStatus==="paid"?"bg-green-50 text-green-800":"bg-amber-50 text-amber-800";
+  return <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-sm">
+    <div className="p-6 sm:p-7">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={"rounded-full px-3 py-1 text-xs font-semibold capitalize "+statusClass}>{booking.bookingStatus}</span>
+            <span className={"rounded-full px-3 py-1 text-xs font-semibold capitalize "+paymentClass}>{booking.paymentStatus}</span>
+          </div>
+          <h3 className="mt-4 text-xl font-semibold text-forest">{booking.roomNameSnapshot}</h3>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink/55">
+            <span className="flex items-center gap-2"><CalendarDays size={15}/>{booking.checkIn} → {booking.checkOut}</span>
+            <span className="flex items-center gap-2"><Users size={15}/>{booking.adults} adults{booking.children? " · "+booking.children+" children":""}</span>
+          </div>
+        </div>
+        <div className="text-left lg:text-right">
+          <div className="text-2xl font-semibold text-forest">{money(booking.totalAmount)}</div>
+          <div className="mt-1 text-xs text-ink/40">{booking.nights} night{booking.nights===1?"":"s"} · {booking.id}</div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-2 border-t border-black/5 pt-5">
+        <button className="btn-secondary" onClick={()=>setExpanded(!expanded)}>{expanded?"Hide details":"View details"} <ArrowRight size={15} className={expanded?"rotate-90":""}/></button>
+        {booking.bookingStatus==="confirmed"&&<button className="btn-secondary" disabled={busy} onClick={()=>void cancel()}>{busy?"Cancelling...":"Cancel reservation"}</button>}
+      </div>
+      {error&&<div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+
+      {expanded&&<div className="mt-5 grid gap-5 rounded-2xl bg-cream p-5 sm:grid-cols-2">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-ink/40">Guest details</div>
+          <div className="mt-2 text-sm text-forest">{booking.guestName}</div>
+          <div className="mt-1 text-sm text-ink/55">{booking.guestEmail}</div>
+          <div className="mt-1 text-sm text-ink/55">{booking.guestPhone}</div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wider text-ink/40">Price breakdown</div>
+          <div className="mt-2 flex justify-between text-sm"><span>Room</span><span>{money(booking.baseAmount)}</span></div>
+          <div className="mt-1 flex justify-between text-sm"><span>Taxes</span><span>{money(booking.taxAmount)}</span></div>
+          <div className="mt-2 flex justify-between border-t border-black/5 pt-2 font-semibold text-forest"><span>Total</span><span>{money(booking.totalAmount)}</span></div>
+        </div>
+        {booking.specialRequests&&<div className="sm:col-span-2"><div className="text-xs uppercase tracking-wider text-ink/40">Special requests</div><p className="mt-2 text-sm leading-6 text-ink/60">{booking.specialRequests}</p></div>}
+      </div>}
+    </div>
+  </div>
+}
 function Restaurant(){const menu=useQuery({queryKey:["menu"],queryFn:getMenuItems}).data??[];return <div className="container-page py-20"><Heading eyebrow="The Courtyard Table" title="Comfort food, polished simply." body="Breakfast, Indian favourites, beverages and lighter plates, served all day."/><div className="mt-10 grid gap-5 md:grid-cols-2">{menu.map(item=><div className="card flex gap-5 p-5" key={item.id}><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-forest text-white"><Utensils size={19}/></div><div className="flex-1"><div className="flex justify-between gap-4"><div className="font-semibold text-forest">{item.name}</div><div className="font-semibold text-forest">{money(item.price)}</div></div><p className="mt-2 text-sm leading-6 text-ink/55">{item.description}</p></div></div>)}</div></div>}
 
 function Contact(){const [sent,setSent]=useState(false),[error,setError]=useState("");async function submit(e:FormEvent){e.preventDefault();setError("");const f=new FormData(e.currentTarget as HTMLFormElement);try{await createContactMessage({name:String(f.get("name")),email:String(f.get("email")),phone:String(f.get("phone")),message:String(f.get("message"))});setSent(true)}catch(err){setError(err instanceof Error?err.message:"Could not send message.")}}return <div className="container-page py-20"><div className="grid gap-10 lg:grid-cols-2"><div><Heading eyebrow="Contact" title="Let’s plan something comfortable." body="Reach us for stays, events, group bookings or transport requests."/><div className="mt-8 space-y-4 text-sm text-ink/60"><div className="flex gap-3"><MapPin size={17}/> Motijheel, Muzaffarpur, Bihar</div><div className="flex gap-3"><MessageCircle size={17}/> stay@grandcourtyard.example</div><div className="flex gap-3"><Clock3 size={17}/> Front desk 24/7</div></div></div><form className="card space-y-4 p-7" onSubmit={submit}><input className="input" name="name" placeholder="Name" required/><input className="input" name="email" type="email" placeholder="Email" required/><input className="input" name="phone" placeholder="Phone" required/><textarea className="input min-h-36" name="message" placeholder="How can we help?" required/>{sent&&<div className="rounded-2xl bg-green-50 p-4 text-sm text-green-800">Thanks. Your enquiry is recorded.</div>}{error&&<div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}<button className="btn-primary w-full">Send enquiry</button></form></div></div>}
