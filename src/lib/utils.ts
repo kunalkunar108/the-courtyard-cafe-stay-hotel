@@ -1,0 +1,1 @@
+export const money=(v:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(v);export const nights=(a:string,b:string)=>Math.max(0,Math.round((new Date(b).getTime()-new Date(a).getTime())/86400000));export const today=()=>new Date().toISOString().slice(0,10);
