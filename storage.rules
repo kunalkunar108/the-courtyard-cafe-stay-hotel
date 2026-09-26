@@ -1,8 +1,32 @@
-rules_version='2';service firebase.storage{match /b/{bucket}/o{
-function signedIn(){return request.auth!=null;}function staff(){return signedIn()&&(request.auth.token.admin==true||request.auth.token.staff==true);}
-match /users/{uid}/{allPaths=**}{allow read:if signedIn()&&request.auth.uid==uid||staff();allow write:if signedIn()&&request.auth.uid==uid||staff();}
-match /rooms/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
-match /gallery/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
-match /restaurant/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
-match /events/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
-}}
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function staff() { return signedIn() && (request.auth.token.admin == true || request.auth.token.staff == true); }
+    function imageWrite() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+    }
+
+    match /users/{uid}/{allPaths=**} {
+      allow read: if signedIn() && request.auth.uid == uid || staff();
+      allow write: if signedIn() && request.auth.uid == uid && imageWrite() || staff() && imageWrite();
+    }
+    match /rooms/{id}/{allPaths=**} {
+      allow read: if true;
+      allow write: if staff() && imageWrite();
+    }
+    match /gallery/{id}/{allPaths=**} {
+      allow read: if true;
+      allow write: if staff() && imageWrite();
+    }
+    match /restaurant/{id}/{allPaths=**} {
+      allow read: if true;
+      allow write: if staff() && imageWrite();
+    }
+    match /events/{id}/{allPaths=**} {
+      allow read: if true;
+      allow write: if staff() && imageWrite();
+    }
+  }
+}
