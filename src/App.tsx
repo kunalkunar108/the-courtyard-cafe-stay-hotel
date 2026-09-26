@@ -151,7 +151,7 @@ function BookingCard({booking}:{booking:Booking}){
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2 border-t border-black/5 pt-5">
-        <button className="btn-secondary" onClick={()=>setExpanded(!expanded)}>{expanded?"Hide details":"View details"} <ArrowRight size={15} className={expanded?"rotate-90":""}/></button>
+        <button className="btn-secondary" onClick={()=>setExpanded(!expanded)}>{expanded?"Hide details":"Quick details"} <ArrowRight size={15} className={expanded?"rotate-90":""}/></button><Link className="btn-secondary" to={"/booking/"+booking.id}>View reservation</Link>
         {booking.bookingStatus==="confirmed"&&<button className="btn-secondary" disabled={busy} onClick={()=>void cancel()}>{busy?"Cancelling...":"Cancel reservation"}</button>}
       </div>
       {error&&<div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
