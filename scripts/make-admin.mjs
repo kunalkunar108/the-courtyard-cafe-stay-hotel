@@ -1,0 +1,1 @@
+import {getApps,initializeApp} from "firebase-admin/app";import {getAuth} from "firebase-admin/auth";const email=process.argv[2];if(!email)throw new Error("Usage: npm run make-admin user@email.com");initializeApp();const user=await getAuth().getUserByEmail(email);await getAuth().setCustomUserClaims(user.uid,{admin:true});console.log("Admin claim applied to",email);
