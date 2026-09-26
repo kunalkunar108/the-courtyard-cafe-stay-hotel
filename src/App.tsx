@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, CheckCircle2, Coffee, Clock3, CreditCard, Facebook, Instagram, MapPin, Menu, MessageCircle, Phone, Printer, ShieldCheck, Star, Users, Utensils, Wifi, X } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, Coffee, Clock3, CreditCard, Facebook, Instagram, MapPin, Menu, MessageCircle, Printer, ShieldCheck, Star, Users, Utensils, Wifi, X } from "lucide-react";
 import { useAuth } from "./contexts/AuthContext";
 import { calculateQuote, cancelBooking, createBooking, createContactMessage, getApprovedReviews, getMenuItems, getRoom, getRooms, getUserBookings, verifyPayment } from "./services/hotelService";
 import { money, today } from "./lib/utils";
