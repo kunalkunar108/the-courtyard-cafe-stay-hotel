@@ -39,7 +39,7 @@ export async function createBooking(input:{
   if(!firebaseConfigured||!functions)throw new Error("Connect Firebase before accepting real bookings.");
   const fn=httpsCallable(functions,"createBooking");
   const res=await fn(input);
-  return res.data as {bookingId:string;paymentRequired:boolean;razorpayOrderId?:string;amount:number;currency:string};
+  return res.data as {bookingId:string;paymentRequired:boolean;razorpayOrderId?:string;amount:number;currency:string;keyId?:string};
 }
 export async function verifyPayment(input:{bookingId:string;razorpayOrderId:string;razorpayPaymentId:string;razorpaySignature:string}){
   if(!functions)throw new Error("Firebase Functions are not configured.");
