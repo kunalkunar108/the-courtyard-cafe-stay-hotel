@@ -1,0 +1,8 @@
+rules_version='2';service firebase.storage{match /b/{bucket}/o{
+function signedIn(){return request.auth!=null;}function staff(){return signedIn()&&(request.auth.token.admin==true||request.auth.token.staff==true);}
+match /users/{uid}/{allPaths=**}{allow read:if signedIn()&&request.auth.uid==uid||staff();allow write:if signedIn()&&request.auth.uid==uid||staff();}
+match /rooms/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
+match /gallery/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
+match /restaurant/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
+match /events/{id}/{allPaths=**}{allow read:if true;allow write:if staff();}
+}}
