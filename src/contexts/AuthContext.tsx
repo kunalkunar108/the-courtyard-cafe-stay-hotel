@@ -16,9 +16,10 @@ export function AuthProvider({children}:{children:React.ReactNode}){
     if(!auth||!db){setLoading(false);return}
     return onAuthStateChanged(auth,async u=>{
       if(!u){setUser(null);setProfile(null);setLoading(false);return}
+      await u.getIdToken(true);
       setUser({uid:u.uid,email:u.email,displayName:u.displayName,photoURL:u.photoURL});
       const snap=await getDoc(doc(db,"users",u.uid));
-      setProfile(snap.exists()?snap.data() as UserProfile:null);
+      if(snap.exists()) setProfile(snap.data() as UserProfile); else { await setDoc(doc(db,"users",u.uid),{uid:u.uid,name:u.displayName||"Guest",email:u.email||"",role:"customer" as Role,createdAt:serverTimestamp()}); setProfile({uid:u.uid,name:u.displayName||"Guest",email:u.email||"",role:"customer"}); }
       setLoading(false);
     });
   },[]);
