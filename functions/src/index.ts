@@ -1,0 +1,56 @@
+import {onCall,HttpsError} from "firebase-functions/v2/https";
+import {defineSecret} from "firebase-functions/params";
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore,FieldValue} from "firebase-admin/firestore";
+import crypto from "node:crypto";
+import Razorpay from "razorpay";
+initializeApp();
+const db=getFirestore();
+const keyId=defineSecret("RAZORPAY_KEY_ID"),keySecret=defineSecret("RAZORPAY_KEY_SECRET");
+const overlap=(a:string,b:string,c:string,d:string)=>new Date(a)<new Date(d)&&new Date(b)>new Date(c);
+const nightCount=(a:string,b:string)=>Math.max(0,Math.round((new Date(b).getTime()-new Date(a).getTime())/86400000));
+export const createBooking=onCall({region:"asia-south1",secrets:[keyId,keySecret]},async req=>{
+  if(!req.auth)throw new HttpsError("unauthenticated","Sign in first.");
+  const d=req.data as {roomId?:string;guestName?:string;guestEmail?:string;guestPhone?:string;checkIn?:string;checkOut?:string;adults?:number;children?:number;specialRequests?:string};
+  if(!d.roomId||!d.guestName||!d.guestEmail||!d.guestPhone||!d.checkIn||!d.checkOut)throw new HttpsError("invalid-argument","Booking details are incomplete.");
+  if(new Date(d.checkIn)>=new Date(d.checkOut))throw new HttpsError("invalid-argument","Check-out must be after check-in.");
+  const roomRef=db.doc("rooms/"+d.roomId),roomSnap=await roomRef.get();
+  if(!roomSnap.exists)throw new HttpsError("not-found","Room not found.");
+  const room=roomSnap.data() as {name:string;price:number;capacity:number;status:string};
+  if(room.status!=="available")throw new HttpsError("failed-precondition","Room is not currently available.");
+  const adults=Math.max(1,Number(d.adults??1)),children=Math.max(0,Number(d.children??0));
+  if(adults+children>room.capacity)throw new HttpsError("failed-precondition","Guest count exceeds room capacity.");
+  const existing=await db.collection("bookings").where("roomId","==",d.roomId).get();
+  if(existing.docs.some(x=>{const b=x.data();return !["cancelled","completed"].includes(b.bookingStatus)&&overlap(b.checkIn,b.checkOut,d.checkIn!,d.checkOut!)}))throw new HttpsError("already-exists","Those dates are no longer available.");
+  const count=nightCount(d.checkIn,d.checkOut),base=room.price*count,tax=Math.round(base*.12),total=base+tax;
+  const bookingRef=db.collection("bookings").doc(),paymentRef=db.collection("payments").doc();
+  await db.runTransaction(async tx=>{
+    const latestRoom=await tx.get(roomRef);
+    if(!latestRoom.exists||latestRoom.data()?.status!=="available")throw new HttpsError("failed-precondition","Room is no longer available.");
+    const latest=await tx.get(db.collection("bookings").where("roomId","==",d.roomId));
+    if(latest.docs.some(x=>{const b=x.data();return !["cancelled","completed"].includes(b.bookingStatus)&&overlap(b.checkIn,b.checkOut,d.checkIn!,d.checkOut!)}))throw new HttpsError("already-exists","The room was just reserved.");
+    tx.set(bookingRef,{userId:req.auth!.uid,roomId:d.roomId,roomNameSnapshot:room.name,guestName:d.guestName,guestEmail:d.guestEmail,guestPhone:d.guestPhone,checkIn:d.checkIn,checkOut:d.checkOut,adults,children,nights:count,baseAmount:base,taxAmount:tax,discountAmount:0,totalAmount:total,paymentStatus:"pending",bookingStatus:"pending",specialRequests:d.specialRequests??"",createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+    tx.set(paymentRef,{bookingId:bookingRef.id,userId:req.auth!.uid,amount:total,currency:"INR",status:"pending",createdAt:FieldValue.serverTimestamp()});
+  });
+  if(!keyId.value()||!keySecret.value())return {bookingId:bookingRef.id,paymentRequired:false,amount:total,currency:"INR"};
+  const razorpay=new Razorpay({key_id:keyId.value(),key_secret:keySecret.value()});
+  const order=await razorpay.orders.create({amount:total*100,currency:"INR",receipt:bookingRef.id});
+  await paymentRef.update({razorpayOrderId:order.id});
+  return {bookingId:bookingRef.id,paymentRequired:true,razorpayOrderId:order.id,amount:total,currency:"INR"};
+});
+export const verifyRazorpayPayment=onCall({region:"asia-south1",secrets:[keySecret]},async req=>{
+  if(!req.auth)throw new HttpsError("unauthenticated","Sign in first.");
+  const d=req.data as {bookingId?:string;razorpayOrderId?:string;razorpayPaymentId?:string;razorpaySignature?:string};
+  if(!d.bookingId||!d.razorpayOrderId||!d.razorpayPaymentId||!d.razorpaySignature)throw new HttpsError("invalid-argument","Payment details are incomplete.");
+  const bookingRef=db.doc("bookings/"+d.bookingId),booking=await bookingRef.get();
+  if(!booking.exists||booking.data()?.userId!==req.auth.uid)throw new HttpsError("permission-denied","Booking access denied.");
+  const payments=await db.collection("payments").where("bookingId","==",d.bookingId).limit(1).get();
+  if(payments.empty)throw new HttpsError("not-found","Payment record not found.");
+  const expected=crypto.createHmac("sha256",keySecret.value()).update(d.razorpayOrderId+"|"+d.razorpayPaymentId).digest("hex");
+  if(expected!==d.razorpaySignature)throw new HttpsError("permission-denied","Payment verification failed.");
+  await db.runTransaction(async tx=>{
+    tx.update(payments.docs[0].ref,{razorpayOrderId:d.razorpayOrderId,razorpayPaymentId:d.razorpayPaymentId,razorpaySignature:d.razorpaySignature,status:"paid",verifiedAt:FieldValue.serverTimestamp()});
+    tx.update(bookingRef,{paymentStatus:"paid",bookingStatus:"confirmed",updatedAt:FieldValue.serverTimestamp()});
+  });
+  return {verified:true};
+});
