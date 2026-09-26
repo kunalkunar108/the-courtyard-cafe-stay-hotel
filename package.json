@@ -10,7 +10,9 @@
     "test": "vitest run",
     "functions:build": "npm --prefix functions run build",
     "firebase:deploy": "firebase deploy",
-    "make-admin": "node scripts/make-admin.mjs"
+    "make-admin": "node scripts/make-admin.mjs",
+    "make-staff": "node scripts/make-staff.mjs",
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules,storage"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.89.0",
