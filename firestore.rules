@@ -1,0 +1,18 @@
+rules_version='2';service cloud.firestore{match /databases/{database}/documents{
+function signedIn(){return request.auth!=null;}function admin(){return signedIn()&&request.auth.token.admin==true;}function staff(){return signedIn()&&(request.auth.token.admin==true||request.auth.token.staff==true);}
+match /users/{uid}{allow read:if signedIn()&&(request.auth.uid==uid||admin());allow create:if signedIn()&&request.auth.uid==uid&&request.resource.data.uid==request.auth.uid&&request.resource.data.role=='customer';allow update:if signedIn()&&request.auth.uid==uid&&request.resource.data.uid==resource.data.uid&&request.resource.data.role==resource.data.role&&request.resource.data.email==resource.data.email;allow delete:if admin();}
+match /rooms/{id}{allow read:if resource.data.status=='available'||staff();allow create,update,delete:if staff();}
+match /bookings/{id}{allow read:if admin()||staff()||(signedIn()&&resource.data.userId==request.auth.uid);allow create:if false;allow update:if staff()||(signedIn()&&resource.data.userId==request.auth.uid&&request.resource.data.userId==resource.data.userId&&request.resource.data.totalAmount==resource.data.totalAmount&&request.resource.data.paymentStatus==resource.data.paymentStatus&&request.resource.data.bookingStatus=='cancelled');allow delete:if admin();}
+match /payments/{id}{allow read:if admin()||staff()||(signedIn()&&resource.data.userId==request.auth.uid);allow write:if false;}
+match /reviews/{id}{allow read:if resource.data.status=='approved'||admin();allow create:if signedIn()&&request.resource.data.userId==request.auth.uid&&request.resource.data.status=='pending';allow update,delete:if admin();}
+match /coupons/{id}{allow read:if signedIn();allow write:if admin();}
+match /menuItems/{id}{allow read:if resource.data.available==true||staff();allow write:if staff();}
+match /amenities/{id}{allow read:if true;allow write:if staff();}
+match /gallery/{id}{allow read:if true;allow write:if staff();}
+match /contactMessages/{id}{allow create:if true;allow read,update,delete:if staff();}
+match /eventEnquiries/{id}{allow create:if true;allow read,update,delete:if staff();}
+match /hotelSettings/{id}{allow read:if true;allow write:if admin();}
+match /roomServiceOrders/{id}{allow read:if staff()||(signedIn()&&resource.data.userId==request.auth.uid);allow create:if signedIn()&&request.resource.data.userId==request.auth.uid;allow update:if staff();}
+match /notifications/{id}{allow read:if admin()||(signedIn()&&resource.data.userId==request.auth.uid);allow write:if false;}
+match /auditLogs/{id}{allow read:if admin();allow write:if false;}
+}}
