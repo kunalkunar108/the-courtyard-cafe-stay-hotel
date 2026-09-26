@@ -218,8 +218,77 @@ function Reviews(){
  </>;
 }
 
+
+type GalleryCategory="Hotel"|"Rooms"|"Restaurant";
+type GalleryItem={id:string;title:string;category:GalleryCategory;url:string;featured:boolean;order:number;alt:string};
+
+const gallerySeed:GalleryItem[]=[
+{id:"IMG-001",title:"Grand Courtyard Exterior",category:"Hotel",url:"https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80",featured:true,order:1,alt:"Grand Courtyard Hotel exterior"},
+{id:"IMG-002",title:"Courtyard Garden",category:"Hotel",url:"https://images.unsplash.com/photo-1584132967334-10e028bd69f7?auto=format&fit=crop&w=1200&q=80",featured:true,order:2,alt:"Hotel courtyard garden"},
+{id:"IMG-003",title:"Deluxe Room",category:"Rooms",url:"https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1200&q=80",featured:false,order:3,alt:"Deluxe hotel room"},
+{id:"IMG-004",title:"Grand Suite",category:"Rooms",url:"https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80",featured:true,order:4,alt:"Grand suite interior"},
+{id:"IMG-005",title:"Restaurant Dining",category:"Restaurant",url:"https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=80",featured:false,order:5,alt:"Hotel restaurant dining area"},
+{id:"IMG-006",title:"Breakfast Table",category:"Restaurant",url:"https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&w=1200&q=80",featured:false,order:6,alt:"Hotel breakfast table"}
+];
+
+function Gallery(){
+ const[items,setItems]=useState<GalleryItem[]>(()=>load("gc-admin-gallery",gallerySeed));
+ const[category,setCategory]=useState<"All"|GalleryCategory>("All");
+ const[q,setQ]=useState("");
+ const[editing,setEditing]=useState<GalleryItem|null>(null);
+ const[adding,setAdding]=useState(false);
+ const[notice,setNotice]=useState("");
+ const[form,setForm]=useState<GalleryItem>(gallerySeed[0]);
+ const filtered=useMemo(()=>[...items].sort((a,b)=>a.order-b.order).filter(i=>(category==="All"||i.category===category)&&[i.id,i.title,i.category,i.alt].join(" ").toLowerCase().includes(q.toLowerCase())),[items,category,q]);
+ const notify=(message:string)=>{setNotice(message);setTimeout(()=>setNotice(""),2200)};
+ const persist=(next:GalleryItem[])=>{const normalized=next.map((x,i)=>({...x,order:i+1}));setItems(normalized);save("gc-admin-gallery",normalized)};
+ const openAdd=()=>{setForm({id:"IMG-"+String(Date.now()).slice(-6),title:"",category:"Hotel",url:"",featured:false,order:items.length+1,alt:""});setAdding(true)};
+ const openEdit=(item:GalleryItem)=>{setForm({...item});setEditing(item)};
+ const saveItem=()=>{if(!form.title.trim()||!form.url.trim()){notify("Add a title and image first");return}const next=editing?items.map(i=>i.id===editing.id?{...form}:i):[...items,{...form,order:items.length+1}];persist(next);setEditing(null);setAdding(false);notify(editing?"Image updated":"Image added")};
+ const remove=(id:string)=>{if(!confirm("Delete this gallery image from the demo library?"))return;persist(items.filter(i=>i.id!==id));setEditing(null);notify("Image deleted")};
+ const move=(id:string,direction:-1|1)=>{const sorted=[...items].sort((a,b)=>a.order-b.order);const index=sorted.findIndex(i=>i.id===id);const target=index+direction;if(index<0||target<0||target>=sorted.length)return;[sorted[index],sorted[target]]=[sorted[target],sorted[index]];persist(sorted);notify("Gallery order updated")};
+ const handleUpload=(file:File|null)=>{if(!file)return;if(!file.type.startsWith("image/")){notify("Please choose an image file");return}if(file.size>1500000){notify("For demo mode, use an image under 1.5 MB");return}const reader=new FileReader();reader.onload=()=>{setForm(f=>({...f,url:String(reader.result),title:f.title||file.name.replace(/\\.[^/.]+$/,""),alt:f.alt||file.name.replace(/\\.[^/.]+$/,"")}));notify("Image loaded — save the item to add it")};reader.readAsDataURL(file)};
+ const featured=items.filter(i=>i.featured).length;
+ return <><Head eyebrow="Hotel media" title="Gallery management" body="Organize hotel, room and restaurant photography, upload new images, feature key photos and control their display order." action={<button className="btn-primary" onClick={openAdd}>Add image</button>}/>
+ {notice&&<div className="mt-5 flex items-center gap-2 rounded-2xl bg-green-50 p-4 text-sm text-green-800"><CheckCircle2 size={17}/>{notice}</div>}
+ <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+   <Metric label="Total images" value={String(items.length)} change="Demo gallery library" icon={ImageIcon}/>
+   <Metric label="Hotel" value={String(items.filter(i=>i.category==="Hotel").length)} change="Property photography" icon={ImageIcon}/>
+   <Metric label="Rooms" value={String(items.filter(i=>i.category==="Rooms").length)} change="Room photography" icon={BedDouble}/>
+   <Metric label="Featured" value={String(featured)} change="Highlighted across the gallery" icon={Star}/>
+ </div>
+ <div className="mt-6 flex flex-col gap-3 rounded-[24px] border border-black/5 bg-white p-4 md:flex-row">
+   <div className="flex flex-1 items-center gap-3 rounded-xl border border-black/10 px-3"><Search size={17} className="text-ink/35"/><input className="w-full bg-transparent py-2 outline-none" placeholder="Search image title, category or alt text" value={q} onChange={e=>setQ(e.target.value)}/></div>
+   <select className="input md:w-48" value={category} onChange={e=>setCategory(e.target.value as "All"|GalleryCategory)}><option>All</option><option>Hotel</option><option>Rooms</option><option>Restaurant</option></select>
+ </div>
+ <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+   {filtered.map((item,index)=><div key={item.id} className="overflow-hidden rounded-[26px] border border-black/5 bg-white shadow-sm">
+     <div className="relative aspect-[16/10] overflow-hidden bg-cream"><img src={item.url} alt={item.alt||item.title} className="h-full w-full object-cover" onError={e=>{e.currentTarget.style.display="none"}}/><div className="absolute left-3 top-3 flex gap-2"><Badge>{item.category}</Badge>{item.featured&&<Badge>Featured</Badge>}</div><div className="absolute right-3 top-3 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white">#{item.order}</div></div>
+     <div className="p-5"><div className="flex items-start justify-between gap-3"><div><div className="font-semibold text-forest">{item.title}</div><div className="mt-1 text-xs text-ink/40">{item.id}</div></div><button className="rounded-xl border p-2 text-gold" onClick={()=>openEdit(item)} aria-label={"Edit "+item.title}><Settings size={15}/></button></div>
+       <p className="mt-3 line-clamp-2 text-xs leading-5 text-ink/50">{item.alt||"No alt text added"}</p>
+       <div className="mt-5 flex items-center justify-between gap-2"><div className="flex gap-2"><button className="rounded-xl border p-2 disabled:opacity-30" disabled={index===0} onClick={()=>move(item.id,-1)} aria-label="Move image up">↑</button><button className="rounded-xl border p-2 disabled:opacity-30" disabled={index===filtered.length-1} onClick={()=>move(item.id,1)} aria-label="Move image down">↓</button></div><div className="flex gap-2"><button className="btn-secondary min-h-9 px-3 text-xs" onClick={()=>openEdit(item)}>Edit</button><button className="rounded-xl border p-2 text-red-600" onClick={()=>remove(item.id)} aria-label={"Delete "+item.title}><Trash2 size={15}/></button></div></div>
+     </div>
+   </div>)}
+ </div>
+ {filtered.length===0&&<div className="mt-5 rounded-[24px] bg-white p-10 text-center text-sm text-ink/45">No gallery images match your filters.</div>}
+ {(editing||adding)&&<Modal title={editing?"Edit gallery image":"Add gallery image"} onClose={()=>{setEditing(null);setAdding(false)}}>
+   <div className="mt-6 rounded-2xl border-2 border-dashed border-black/10 bg-cream p-5 text-center">
+     {form.url?<img src={form.url} alt="Preview" className="mx-auto max-h-52 rounded-xl object-cover"/>:<div className="mx-auto flex h-32 max-w-md items-center justify-center rounded-xl border border-black/5 bg-white text-ink/35"><ImageIcon size={30}/></div>}
+     <label className="btn-secondary mt-4 inline-flex cursor-pointer items-center gap-2"><ImageIcon size={16}/>Choose image<input type="file" accept="image/*" className="hidden" onChange={e=>handleUpload(e.target.files?.[0]||null)}/></label>
+     <p className="mt-2 text-xs text-ink/40">Demo upload stores a small image in this browser. Use JPG/PNG/WebP under 1.5 MB.</p>
+   </div>
+   <div className="mt-6 grid gap-4 sm:grid-cols-2">
+     <label className="text-sm sm:col-span-2">Image title<input className="input mt-2" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Sunset Courtyard"/></label>
+     <label className="text-sm">Category<select className="input mt-2" value={form.category} onChange={e=>setForm({...form,category:e.target.value as GalleryCategory})}><option>Hotel</option><option>Rooms</option><option>Restaurant</option></select></label>
+     <label className="text-sm">Image URL<input className="input mt-2" value={form.url} onChange={e=>setForm({...form,url:e.target.value})} placeholder="https://..."/></label>
+     <label className="text-sm sm:col-span-2">Alt text<input className="input mt-2" value={form.alt} onChange={e=>setForm({...form,alt:e.target.value})} placeholder="Describe the image for accessibility"/></label>
+     <label className="flex items-center justify-between rounded-xl border border-black/5 bg-cream p-4 text-sm sm:col-span-2"><span><span className="font-semibold text-forest">Featured image</span><span className="mt-1 block text-xs text-ink/45">Highlight this photo in the public gallery.</span></span><input type="checkbox" checked={form.featured} onChange={e=>setForm({...form,featured:e.target.checked})} className="h-5 w-5"/></label>
+   </div>
+   <div className="mt-6 flex flex-wrap justify-between gap-3"><div>{editing&&<button className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700" onClick={()=>remove(editing.id)}>Delete image</button>}</div><div className="flex gap-3"><button className="btn-secondary" onClick={()=>{setEditing(null);setAdding(false)}}>Cancel</button><button className="btn-primary" onClick={saveItem}>{editing?"Save changes":"Add image"}</button></div></div>
+ </Modal>}
+ </>;
+}
+
 function Generic({title,eyebrow,icon:Icon,body,items}:{title:string;eyebrow:string;icon:typeof FileText;body:string;items:string[]}){return <><Head eyebrow={eyebrow} title={title} body={body}/><div className="mt-6 grid gap-4 md:grid-cols-3">{items.map(item=><div key={item} className="rounded-[24px] border border-black/5 bg-white p-6"><Icon className="text-gold" size={20}/><div className="mt-4 font-semibold text-forest">{item}</div><p className="mt-2 text-sm text-ink/45">This management module is ready for the next backend integration.</p></div>)}</div></>}
 
-function Analytics(){return <><Head eyebrow="Insights" title="Analytics" body="Track revenue, occupancy and booking performance."/><div className="mt-6 grid gap-5 lg:grid-cols-3"><Metric label="Monthly revenue" value="₹8.42L" change="Demo figure" icon={CircleDollarSign}/><Metric label="Average occupancy" value="71%" change="Last 30 days · demo" icon={BarChart3}/><Metric label="Average booking value" value="₹6,980" change="Demo figure" icon={FileText}/></div><div className="mt-6 rounded-[26px] border border-black/5 bg-white p-6"><div className="font-semibold text-forest">Revenue trend</div><div className="mt-6 flex h-56 items-end gap-3">{[35,48,42,65,58,72,68,82,76,91,85,96].map((h,i)=><div key={i} className="flex-1 rounded-t-xl bg-forest/80" style={{height:h+"%"}} title={"Month "+(i+1)}/>)}</div></div></>}
-
-export default function AdminDashboard(){const{pathname}=useLocation();const{user,profile}=useAuth();if(user&&profile&&profile.role!=="admin")return <Navigate to="/" replace/>;let content:ReactNode;if(pathname==="/admin")content=<Overview/>;else if(pathname==="/admin/bookings")content=<Bookings/>;else if(pathname==="/admin/rooms")content=<Rooms/>;else if(pathname==="/admin/analytics")content=<Analytics/>;else if(pathname==="/admin/customers")content=<Customers/>;else if(pathname==="/admin/restaurant")content=<Restaurant/>;else if(pathname==="/admin/room-service")content=<RoomService/>;else if(pathname==="/admin/reviews")content=<Reviews/>;else if(pathname==="/admin/gallery")content=<Generic title="Gallery" eyebrow="Hotel media" icon={ImageIcon} body="Manage hotel photography." items={["Hotel photos","Room photos","Restaurant photos"]}/>;else if(pathname==="/admin/coupons")content=<Generic title="Coupons" eyebrow="Promotions" icon={Percent} body="Create and monitor promotional codes." items={["Active coupons","Expired coupons","Usage reports"]}/>;else if(pathname==="/admin/events")content=<Generic title="Events" eyebrow="Meetings & celebrations" icon={CalendarDays} body="Manage event enquiries." items={["New enquiries","Upcoming events","Event spaces"]}/>;else if(pathname==="/admin/messages")content=<Generic title="Messages" eyebrow="Guest communication" icon={MessageSquare} body="Review contact messages." items={["Unread messages","All enquiries","Resolved messages"]}/>;else content=<Generic title="Settings" eyebrow="Configuration" icon={Settings} body="Hotel profile, policies and operational settings." items={["Hotel profile","Booking policies","Payment settings","Notifications","Staff access","Audit log"]}/>;return <Shell>{content}</Shell>}
+export default function AdminDashboard(){const{pathname}=useLocation();const{user,profile}=useAuth();if(user&&profile&&profile.role!=="admin")return <Navigate to="/" replace/>;let content:ReactNode;if(pathname==="/admin")content=<Overview/>;else if(pathname==="/admin/bookings")content=<Bookings/>;else if(pathname==="/admin/rooms")content=<Rooms/>;else if(pathname==="/admin/analytics")content=<Analytics/>;else if(pathname==="/admin/customers")content=<Customers/>;else if(pathname==="/admin/restaurant")content=<Restaurant/>;else if(pathname==="/admin/room-service")content=<RoomService/>;else if(pathname==="/admin/reviews")content=<Reviews/>;else if(pathname==="/admin/gallery")content=<Gallery/>;else if(pathname==="/admin/coupons")content=<Generic title="Coupons" eyebrow="Promotions" icon={Percent} body="Create and monitor promotional codes." items={["Active coupons","Expired coupons","Usage reports"]}/>;else if(pathname==="/admin/events")content=<Generic title="Events" eyebrow="Meetings & celebrations" icon={CalendarDays} body="Manage event enquiries." items={["New enquiries","Upcoming events","Event spaces"]}/>;else if(pathname==="/admin/messages")content=<Generic title="Messages" eyebrow="Guest communication" icon={MessageSquare} body="Review contact messages." items={["Unread messages","All enquiries","Resolved messages"]}/>;else content=<Generic title="Settings" eyebrow="Configuration" icon={Settings} body="Hotel profile, policies and operational settings." items={["Hotel profile","Booking policies","Payment settings","Notifications","Staff access","Audit log"]}/>;return <Shell>{content}</Shell>}
