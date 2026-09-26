@@ -36,7 +36,7 @@ export const createBooking=onCall({region:"asia-south1",secrets:[keyId,keySecret
   const razorpay=new Razorpay({key_id:keyId.value(),key_secret:keySecret.value()});
   const order=await razorpay.orders.create({amount:total*100,currency:"INR",receipt:bookingRef.id});
   await paymentRef.update({razorpayOrderId:order.id});
-  return {bookingId:bookingRef.id,paymentRequired:true,razorpayOrderId:order.id,amount:total,currency:"INR"};
+  return {bookingId:bookingRef.id,paymentRequired:true,razorpayOrderId:order.id,amount:total,currency:"INR",keyId:keyId.value()};
 });
 export const verifyRazorpayPayment=onCall({region:"asia-south1",secrets:[keySecret]},async req=>{
   if(!req.auth)throw new HttpsError("unauthenticated","Sign in first.");
