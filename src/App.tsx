@@ -251,7 +251,7 @@ function BookingDetails(){
           <div className="eyebrow">Need assistance?</div>
           <div className="mt-3 text-2xl font-serif">The front desk is here for you.</div>
           <p className="mt-3 text-sm leading-6 text-white/65">For changes, transport, special requests or stay support, contact the hotel team.</p>
-          <div className="mt-6 space-y-3 text-sm"><div className="flex items-center gap-3"><Phone size={16}/> +91 00000 00000</div><div className="flex items-center gap-3"><MessageCircle size={16}/> stay@grandcourtyard.example</div><div className="flex items-center gap-3"><MapPin size={16}/> Motijheel, Muzaffarpur</div></div>
+          <div className="mt-6 space-y-3 text-sm"><div className="flex items-center gap-3"><Clock3 size={16}/> Front desk 24/7</div><div className="flex items-center gap-3"><MessageCircle size={16}/> stay@grandcourtyard.example</div><div className="flex items-center gap-3"><MapPin size={16}/> Motijheel, Muzaffarpur</div></div>
           <Link className="mt-6 w-full bg-white text-forest btn-secondary" to="/contact">Contact hotel</Link>
         </div>
         <div className="card p-6">
